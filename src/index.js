@@ -24,6 +24,8 @@ function createObserver(jmpSocket) {
     // We don't expect to send errors to the kernel
     console.error(err);
   }, () => {
+    // tear it down, tear it *all* down
+    jmpSocket.removeAllListeners();
     jmpSocket.close();
   });
 }
@@ -38,30 +40,31 @@ function createSubject(jmpSocket) {
   const subj = Subject.create(createObserver(jmpSocket),
                               createObservable(jmpSocket));
   subj.send = subj.onNext; // Adapt naming to fit our parlance
+  subj.close = subj.onCompleted;
   return subj;
 }
 
-function enchannelZMQ(config) {
+function createSocket(type, channel, config) {
   const scheme = config.signature_scheme.slice('hmac-'.length);
+  const socket = new jmp.Socket(type, scheme, config.key);
+  socket.identity = channel + uuid.v4();
+  socket.connect(formConnectionString(config, channel));
+  return socket;
+}
 
-  const shellSocket = new jmp.Socket('dealer', scheme, config.key);
-  const controlSocket = new jmp.Socket('dealer', scheme, config.key);
-  const ioSocket = new jmp.Socket('sub', scheme, config.key);
+function enchannelZMQ(config) {
+  const shellSocket = createSocket('dealer', 'shell', config);
+  const controlSocket = createSocket('dealer', 'control', config);
+  const stdinSocket = createSocket('dealer', 'stdin', config);
+  const iopubSocket = createSocket('sub', 'iopub', config);
 
-  shellSocket.identity = 'shell' + uuid.v4();
-  controlSocket.identity = 'control' + uuid.v4();
-  ioSocket.identity = 'iopub' + uuid.v4();
-
-  shellSocket.connect(formConnectionString(config, 'shell'));
-  controlSocket.connect(formConnectionString(config, 'control'));
-  ioSocket.connect(formConnectionString(config, 'iopub'));
-
-  ioSocket.subscribe('');
+  iopubSocket.subscribe('');
 
   return {
     shell: createSubject(shellSocket),
     control: createSubject(controlSocket),
-    io: createSubject(ioSocket),
+    iopub: createSubject(iopubSocket),
+    stdin: createSubject(stdinSocket),
   };
 }
 
