@@ -1,136 +1,78 @@
-import * as jmp from 'jmp';
-import * as uuid from 'uuid';
+import {
+  SHELL,
+  STDIN,
+  IOPUB,
+  CONTROL,
+} from './constants';
 
-import { Observer, Observable, Subject } from 'rx';
+import {
+  createSubject,
+  createSocket,
+} from './subjection';
+
 /**
- * Takes a Jupyter spec connection info object and channel and returns the
- * string for a channel. Abstracts away tcp and ipc(?) connection string
- * formatting
- * @param {Object} config  Jupyter connection information
- * @param {string} channel Jupyter channel ("iopub", "shell", "control", "stdin")
- * @return {string} The connection string
+ * createShellSubject creates a subject for sending and receiving messages on a
+ * kernel's shell channel
+ * @param  {string} identity UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.shell_port       Port for shell channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the shell
+ *                      channel
  */
-function formConnectionString(config, channel) {
-  const portDelimiter = config.transport === 'tcp' ? ':' : '-';
-  const port = config[channel + '_port'];
-  if (! port) {
-    throw new Error(`Port not found for channel "${channel}"`);
-  }
-  return `${config.transport}://${config.ip}${portDelimiter}${port}`;
+export function createShellSubject(identity, config) {
+  return createSubject(createSocket(SHELL, identity, config));
 }
 
 /**
- * @param {jmp.Socket} socket
- * @param {Object} messageObject Message you want to send to the kernel
+ * createControlSubject creates a subject for sending and receiving on a
+ * kernel's control channel
+ * @param  {string} identity UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.control_port     Port for control channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the control
+ *                      channel
  */
-function sendMessage(socket, messageObject) {
-  const message = new jmp.Message(messageObject);
-  socket.send(message);
+export function createControlSubject(identity, config) {
+  return createSubject(createSocket(CONTROL, identity, config));
 }
 
 /**
- * A RxJS wrapper around jmp sockets, that takes care of sending messages and
- * cleans up after itself
- * @param {jmp.Socket} socket
- * @return {Rx.Observer}
+ * createStdinSubject creates a subject for sending and receiving messages on a
+ * kernel's stdin channel
+ * @param  {string} identity UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.stdin_port       Port for stdin channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the stdin
+ *                      channel
  */
-function createObserver(socket) {
-  return Observer.create(messageObject => {
-    sendMessage(socket, messageObject);
-  }, err => {
-    // We don't expect to send errors to the kernel
-    console.error(err);
-  }, () => {
-    // tear it down, tear it *all* down
-    socket.removeAllListeners();
-    socket.close();
-  });
+export function createStdinSubject(identity, config) {
+  return createSubject(createSocket(STDIN, identity, config));
 }
 
 /**
- * Recursive Object.freeze
- * @param {Object} obj
+ * createIOPubSubject creates a shell subject for receiving messages on a
+ * kernel's iopub channel
+ * @param  {string} identity UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.iopub_port       Port for iopub channel
+ * @param  {string} subscription            subscribed topic; defaults to all
+ * @return {Rx.Subject} subject for receiving messages on the shell_port
+ *                      channel
  */
-function deepFreeze(obj) {
-  // Freeze properties before freezing self
-  Object.getOwnPropertyNames(obj).forEach(name => {
-    const prop = obj[name];
-    if(typeof prop === 'object' && prop !== null && !Object.isFrozen(prop)) {
-      deepFreeze(prop);
-    }
-  });
-  // Freeze self
-  return Object.freeze(obj);
+export function createIOPubSubject(identity, config, subscription = '') {
+  const ioPubSocket = createSocket(IOPUB, identity, config);
+  ioPubSocket.subscribe(subscription);
+  return createSubject(ioPubSocket);
 }
-
-/**
- * Creates observable that behaves according to enchannel spec
- * @param {jmp.Socket} socket
- * @return {Rx.Observable}
- */
-function createObservable(socket) {
-  return Observable.fromEvent(socket, 'message')
-                   .map(msg => {
-                     // Conform to same message format as notebook websockets
-                     // See https://github.com/n-riesco/jmp/issues/10
-                     delete msg.idents;
-                     delete msg.signatureOK;
-                     delete msg.blobs;
-                     // Deep freeze the message
-                     deepFreeze(msg);
-                     return msg;
-                   })
-                   .publish()
-                   .refCount();
-}
-
-/**
- * Helper function for enchannelZMQ
- * @param {jmp.Socket} socket
- * @return {Rx.Subject}
- */
-function createSubject(socket) {
-  const subj = Subject.create(createObserver(socket),
-                              createObservable(socket));
-  subj.send = subj.onNext; // Adapt naming to fit our parlance
-  subj.close = subj.onCompleted;
-  return subj;
-}
-
-/**
- * @param {string} type ZMQ channel type ("dealer", "router", "sub", etc)
- * @param {string} channel Jupyter channel ("iopub", "shell", "control", "stdin")
- * @param {Object} config  Jupyter connection information
- * @return {jmp.Socket} The new Jupyter ZMQ socket
- */
-function createSocket(type, channel, config) {
-  const scheme = config.signature_scheme.slice('hmac-'.length);
-  const socket = new jmp.Socket(type, scheme, config.key);
-  socket.identity = channel + uuid.v4();
-  socket.connect(formConnectionString(config, channel));
-  return socket;
-}
-
-/**
- * Takes in Jupyter connection information and return an object with subjects
- * for each of the Jupyter channels.
- * @param {Object} config  Jupyter connection information
- * @return {Object}
- */
-function enchannelZMQ(config) {
-  const shellSocket = createSocket('dealer', 'shell', config);
-  const controlSocket = createSocket('dealer', 'control', config);
-  const stdinSocket = createSocket('dealer', 'stdin', config);
-  const iopubSocket = createSocket('sub', 'iopub', config);
-
-  iopubSocket.subscribe('');
-
-  return {
-    shell: createSubject(shellSocket),
-    control: createSubject(controlSocket),
-    iopub: createSubject(iopubSocket),
-    stdin: createSubject(stdinSocket),
-  };
-}
-
-module.exports = enchannelZMQ;
