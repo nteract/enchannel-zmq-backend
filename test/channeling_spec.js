@@ -10,7 +10,7 @@ import {
 
 import {
   AnonymousSubject,
-} from 'rx';
+} from '@reactivex/rxjs';
 
 describe('createChannelSubject', () => {
   it('creates a subject for the channel', () => {
