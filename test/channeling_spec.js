@@ -8,10 +8,6 @@ import {
   createIOPubSubject,
 } from '../src';
 
-import {
-  AnonymousSubject,
-} from '@reactivex/rxjs';
-
 describe('createChannelSubject', () => {
   it('creates a subject for the channel', () => {
     const config = {
@@ -22,7 +18,6 @@ describe('createChannelSubject', () => {
       iopub_port: 19009,
     };
     const s = createChannelSubject('iopub', uuid.v4(), config);
-    expect(s).to.be.instanceof(AnonymousSubject);
     expect(s.onNext).to.be.a('function');
     expect(s.send).to.be.a('function');
     expect(s.onCompleted).to.be.a('function');
