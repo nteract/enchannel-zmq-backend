@@ -18,9 +18,9 @@ describe('createChannelSubject', () => {
       iopub_port: 19009,
     };
     const s = createChannelSubject('iopub', uuid.v4(), config);
-    expect(s.onNext).to.be.a('function');
+    expect(s.next).to.be.a('function');
     expect(s.send).to.be.a('function');
-    expect(s.onCompleted).to.be.a('function');
+    expect(s.complete).to.be.a('function');
     expect(s.close).to.be.a('function');
     expect(s.subscribe).to.be.a('function');
     s.close();
