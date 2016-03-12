@@ -48,7 +48,7 @@ Provides functions to create [RxJS](https://github.com/ReactiveX/RxJS) subjects 
 
 ## Usage
 
-`enchannel-zmq-backend` exports a `createChannels` method for creating a channels object per [enchannel spec](https://github.com/nteract/enchannel).
+To get access to all of the `channels` for messaging, use `createChannels`:
 
 ```javascript
 import { createChannels } from 'enchannel-zmq-backend'
@@ -96,7 +96,7 @@ import {
 } from 'enchannel-zmq-backend';
 ```
 
-Creating a subject for a specific channel
+Creating a subject for the `shell` channel:
 
 ```javascript
 const shell = createShellSubject(identity, runtimeConfig)
