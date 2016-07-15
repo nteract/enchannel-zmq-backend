@@ -2,7 +2,7 @@ language: node_js
 
 sudo: false
 
-node_js: 
+node_js:
   - "4.2"
   - "5.4"
 
@@ -16,9 +16,12 @@ addons:
       - uuid-dev
 
 env:
- - ZMQ="3.2.5"
- - ZMQ="4.0.5" SODIUM="1.0.5"
- - ZMQ="4.1.3" SODIUM="1.0.5"
+  matrix:
+    - ZMQ="3.2.5"
+    - ZMQ="4.0.5" SODIUM="1.0.5"
+    - ZMQ="4.1.3" SODIUM="1.0.5"
+  global:
+    secure: bmdjmc+k0O4wXj543Lz89iYz3/fyiiLNPHlS2Pq05OfIMs0R4zwsiab0FORmHH+9uZQga33PKpwUWkD41ktft4/ruie6nUrXKBsUYis8PPkRuYtfbZyJLpmEAdwhwb4PvTKy39M3wHhKhaOTZ8WZNoMnX1Nm8gFQr6OidNYrBtQ3BGk+A1uMr0M06q/nv9T8fmCYf6uGQM7AkRRLWax/xS4LVPIVdiHtI7QFcg8BZ3Bcoby3UEQCeCOcIepP0XP+ecjRjFGInbTv4GsNAvp1aISMKbqFvx5S84l23Erz7sINVWC73iTPEvJJ1k0xvQ/nPBlX84ZfWDW3oDvOUuJ2YKXeik2dg7r5Bdasju0zMitUctSVK+f58vS8+ZHdslmq7uWVf2tSIv54phKYDqdjxcKVqlS7VhtW6F7iAe7uAvK7z6cWECsVG8khXfGpz+cANASEJADEsGKDe1d46tqGgRurb8Fb9+GXEwEGVKo9+R5MbXbktqO9YxzqKcHqp5sYEBDU45udkGQDclOcwoszi8IDwwpphfdhHiWGhyGaZaXABRfV7uL0llc5nL7JaJzpeKwFxjt802dBcMmy0IKkFIWPLXouCC3pdMKCDtrnpAyh42KwhogLLtK6/ZuzvGDQE9XOneW6d8YVUMXsWrjTHkcoQMAPD0TlLX2hh1AjJ9g=
 
 before_install:
  - export CXX=g++-4.8
@@ -50,3 +53,6 @@ before_install:
  - cd ..
 
 install: env LD_LIBRARY_PATH=$LDHACK/lib LD_RUN_PATH=$LDHACK/lib PKG_CONFIG_PATH=$LDHACK/lib/pkgconfig LDFLAGS=-L$LDHACK/lib CFLAGS=-I$LDHACK/lib/include npm install
+
+after_success:
+ - bash ./travis_after_success.sh
