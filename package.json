@@ -9,6 +9,7 @@
     "prebuild": "mkdirp lib && npm run clean",
     "build": "npm run build:es5",
     "build:es5": "babel src --out-dir lib/ --source-maps",
+    "build:docs": "jsdoc -R README.md -d docs src/*.js",
     "test": "mocha --compilers js:babel-core/register --recursive",
     "test:watch": "npm run test -- --watch",
     "clean": "rimraf lib/*"
@@ -44,6 +45,7 @@
     "eslint": "^2.10.1",
     "eslint-plugin-babel": "^3.0.0",
     "fs-promise": "^0.5.0",
+    "jsdoc": "^3.4.0",
     "jupyter-paths": "^1.0.0",
     "mkdirp": "^0.5.1",
     "mocha": "^2.3.4",
