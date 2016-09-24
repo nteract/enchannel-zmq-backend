@@ -1,91 +1,106 @@
 # enchannel-zmq-backend
 
-![enchannel version](https://img.shields.io/badge/enchannel-1.1-ff69b4.svg)
+[![GitHub release](https://img.shields.io/badge/enchannel-zmq-backend-latest-blue.svg)](https://github.com/nteract/enchannel-zmq-backend/releases)
+[![enchannel spec version](https://img.shields.io/badge/enchannel%20spec-version%201.1-ff69b4.svg)](https://github.com/nteract/enchannel/releases)
 
-The ZeroMQ backend for [`enchannel`](https://github.com/nteract/enchannel). The classic edition, since Jupyter relies on ZeroMQ first and foremost.
+[**Installation**](#installation) | [**Usage**](#usage) | 
+[**Contributors and developers**](#contributors-and-developers) | 
+[**Learn more about nteract**](#learn-more-about-nteract)
 
-## Installation
+**enchannel-zmq-backend** offers the ZeroMQ backend implementation for 
+[`enchannel`](https://github.com/nteract/enchannel).
 
-`npm install enchannel-zmq-backend`
+## Technical overview
 
-### ZeroMQ Dependency
+As a refresher for the reader, [*enchannel*][] details nteract's
+lightweight, implementation-flexible specification for communication
+between a user frontend and a backend, such as a language kernel. The 
+*enchannel* specification offers a simple description of "what" 
+messages may be passed between frontends and backends, while leaving
+a developer freedom in "how" to achieve message communication.
 
-For all systems, you'll need
+**enchannel-zmq-backend** takes a classic design approach using ZeroMQ,
+the foundation messaging protocol for the Jupyter project.
+enchannel-zmq-backend implements backend support for the messaging
+channels described in the [Jupyter messaging specification][]. This 
+spec explains how front end clients should communicate with 
+backend language kernels which implement the Jupyter messaging 
+specification.
 
-- [`npm`](https://docs.npmjs.com/getting-started/installing-node)
-- [ZeroMQ](http://zeromq.org/intro:get-the-software)
-- Python 2 (for builds - you can still run Python 3 code)
+## Our backend
 
-Each operating system has their own instruction set. Please read on down to save yourself time.
+**enchannel-zmq-backend** implements the "how" to communicate messages
+to and from a backend.
 
-#### OS X
-
-##### homebrew on OS X
-
-- [`pkg-config`](http://www.freedesktop.org/wiki/Software/pkg-config/): `brew install pkg-config`
-- [ZeroMQ](http://zeromq.org/intro:get-the-software): `brew install zeromq`
-
-#### Windows
-
-- You'll need a compiler! [Visual Studio 2013 Community Edition](https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx) is required to build zmq.node.
-- Python (tread on your own or install [Anaconda](http://continuum.io/downloads))
-
-After these are installed, you'll likely need to restart your machine (especially after Visual Studio).
-
-#### Linux
-
-For Debian/Ubuntu based variants, you'll need `libzmq3-dev` (preferred) or alternatively `libzmq-dev`.   
-For RedHat/CentOS/Fedora based variants, you'll need `zeromq` and `zeromq-devel`.
-
-## About
-
-Provides functions to create [RxJS](https://github.com/ReactiveX/RxJS) subjects (`Observable`s and `Subscriber`s) for four of the Jupyter channels:
+We provide functions to create [RxJS](https://github.com/ReactiveX/RxJS) 
+[Subjects](http://reactivex.io/documentation/subject.html) (two way 
+[Observables](http://reactivex.io/documentation/observable.html) for 
+four of the channels described in the
+[Jupyter messaging specification][]:
 
 * `shell`
 * `control`
 * `iopub`
 * `stdin`
 
+That's it. Functions for four channels; *simplicity in action*.
+
+## Installation
+
+Prerequisite: [Node.js and npm](https://docs.npmjs.com/getting-started/installing-node)
+
+`npm install enchannel-zmq-backend`
+
 ## Usage
 
-To get access to all of the `channels` for messaging, use `createChannels`:
+### Creating messaging channels
+
+To get access to all of the `channels` for messaging (`shell`, `control`,
+`iopub`, and `stdin`), import and use the `createChannels` function:
 
 ```javascript
 import { createChannels } from 'enchannel-zmq-backend'
 ```
 
-The `createChannels` function accepts an identity and a kernel runtime object
-(this matches the on-disk JSON):
+The `createChannels` function accepts two things: 
 
-```javascript
-const runtimeConfig = {
-  stdin_port: 58786,
-  ip: '127.0.0.1',
-  control_port: 58787,
-  hb_port: 58788,
-  signature_scheme: 'hmac-sha256',
-  key: 'dddddddd-eeee-aaaa-dddd-dddddddddddd',
-  shell_port: 58784,
-  transport: 'tcp',
-  iopub_port: 58785
-}
-```
+- an identity
 
-You'll want to set up your identity, relying on the node `uuid` package:
+    You'll want to set up your identity, relying on the node `uuid` package:
+    
+    ```javascript
+    const uuid = require('uuid');
+    const identity = uuid.v4();
+    ```
 
-```javascript
-const uuid = require('uuid');
-const identity = uuid.v4();
-```
+- a runtime object, such as a kernel (which matches the on-disk JSON).
+  Using [`spawnteract`](https://github.com/nteract/spawnteract) with
+  this project helps streamline spawning a kernel. 
 
-To create the channels object:
+    ```javascript
+    const runtimeConfig = {
+      stdin_port: 58786,
+      ip: '127.0.0.1',
+      control_port: 58787,
+      hb_port: 58788,
+      signature_scheme: 'hmac-sha256',
+      key: 'dddddddd-eeee-aaaa-dddd-dddddddddddd',
+      shell_port: 58784,
+      transport: 'tcp',
+      iopub_port: 58785
+    }
+    ```
+
+To create the channels *object*:
 
 ```javascript
 const channels = createChannels(identity, runtimeConfig)
 const { shell, iopub, stdin, control } = channels;
 ```
 
-`enchannel-zmq-backend` also exports four convenience functions to create specific channels
+`enchannel-zmq-backend` also offers four convenience functions to 
+easily create the messaging channels for `control`, `stdin`, `iopub`,
+and `shell` :
 
 ```javascript
 import {
@@ -96,7 +111,7 @@ import {
 } from 'enchannel-zmq-backend';
 ```
 
-Creating a subject for the `shell` channel:
+Creating a *subject* for the `shell` channel:
 
 ```javascript
 const shell = createShellSubject(identity, runtimeConfig)
@@ -104,7 +119,7 @@ const shell = createShellSubject(identity, runtimeConfig)
 
 ### Subscribing to messages
 
-Subscribing to iopub:
+Here's an example about how to subscribe to `iopub` messages:
 
 ```javascript
 const iopub = createIOPubSubject(identity, runtimeConfig);
@@ -115,7 +130,8 @@ var subscription = iopub.subscribe(msg => {
 // later, run subscription.unsubscribe()
 ```
 
-Since these are RxJS Observables, you can also `filter`, `map`, `scan` and many other operators:
+Since these channels are RxJS Observables, you can use `filter`, `map`,
+`scan` and many other RxJS operators:
 
 ```javascript
 iopub.filter(msg => msg.header.msg_type === 'execute_result')
@@ -125,7 +141,7 @@ iopub.filter(msg => msg.header.msg_type === 'execute_result')
 
 ### Sending messages to the kernel
 
-Executing code will rely on sending an [`execute_request` to the `shell` channel](http://jupyter-client.readthedocs.org/en/latest/messaging.html#execute).
+Executing code will rely on sending an [`execute_request` to the `shell` channel][].
 
 ```javascript
 var message = {
@@ -146,7 +162,8 @@ var message = {
 };
 ```
 
-Until we make changes, you'll need to have at least one subscription before you can send on a channel.
+Currently, you'll need to have at least one subscription activated
+before you can send on a channel.
 
 ```javascript
 > shell.subscribe(console.log)
@@ -179,3 +196,46 @@ Until we make changes, you'll need to have at least one subscription before you 
      user_expressions: {},
      payload: [] } }
 ```
+
+## Contributors and developers 
+
+### ZeroMQ Dependency
+
+If you plan to contribute to this project or extend it, you will need
+to have [ZeroMQ](http://zeromq.org/intro:get-the-software) installed on
+your system. The easiest way to do this is to install nteract's
+`zmq-prebuilt`[] binary for your operating system.
+
+### Install a local development environment
+
+To set up a development environment, you'll need to install:
+
+- [`npm`](https://docs.npmjs.com/getting-started/installing-node)
+- [`zmq-prebuilt`][]
+
+Then, fork and clone this repo:
+
+```bash
+git clone https://github.com/nteract/enchannel-zmq-backend.git
+cd enchannel-zmq-backend
+npm install
+```
+
+Develop! We welcome new and first time contributors.
+
+
+## Learn more about nteract
+
+- Visit our website http://nteract.io/.
+- See our organization on GitHub https://github.com/nteract
+- Join us on [Slack](http://slack.nteract.in/) if you need help or have
+  questions. If you have trouble creating an account, either
+  email rgbkrk@gmail.com or post an issue on GitHub.
+
+<img src="https://cloud.githubusercontent.com/assets/836375/15271096/98e4c102-19fe-11e6-999a-a74ffe6e2000.gif" alt="nteract animated logo" height="80px" />
+
+
+[Jupyter messaging specification]: http://jupyter-client.readthedocs.io/en/latest/messaging.html
+[`execute_request` to the `shell` channel]: http://jupyter-client.readthedocs.org/en/latest/messaging.html#execute
+[*enchannel*]: https://github.com/nteract/enchannel/blob/master/README.md
+[`zmq-prebuilt`]: https://github.com/nteract/zmq-prebuilt
