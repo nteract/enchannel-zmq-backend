@@ -42,7 +42,7 @@
     "chalk": "^2.0.0",
     "fs-promise": "^2.0.0",
     "jsdoc": "^3.4.0",
-    "jupyter-paths": "^1.0.0",
+    "jupyter-paths": "^2.0.0",
     "mkdirp": "^0.5.1",
     "mocha": "^3.0.2",
     "rimraf": "^2.5.0",
