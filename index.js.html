@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: index.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: index.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { SHELL, STDIN, IOPUB, CONTROL } from "./constants";
+
+import { createSubject, createSocket } from "./subjection";
+
+/**
+ * createChannels creates an enchannel spec channels object
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.iopub_port       Port for iopub channel
+ * @param  {string} subscription            subscribed topic; defaults to all
+ * @return {object} channels object, per enchannel spec
+ */
+export function createChannels(identity, config, subscription = "") {
+  return {
+    shell: createShellSubject(identity, config),
+    control: createControlSubject(identity, config),
+    stdin: createStdinSubject(identity, config),
+    iopub: createIOPubSubject(identity, config, subscription)
+  };
+}
+
+/**
+ * createChannelSubject creates a subject for sending and receiving messages on
+ * the given channel
+ * @param  {string} channel                 iopub || shell || control || stdin
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.shell_port       Port for shell channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the shell
+ *                      channel
+ */
+export function createChannelSubject(channel, identity, config) {
+  return createSubject(createSocket(channel, identity, config));
+}
+
+/**
+ * createShellSubject creates a subject for sending and receiving messages on a
+ * kernel's shell channel
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.shell_port       Port for shell channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the shell
+ *                      channel
+ */
+export function createShellSubject(identity, config) {
+  return createChannelSubject(SHELL, identity, config);
+}
+
+/**
+ * createControlSubject creates a subject for sending and receiving on a
+ * kernel's control channel
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.control_port     Port for control channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the control
+ *                      channel
+ */
+export function createControlSubject(identity, config) {
+  return createChannelSubject(CONTROL, identity, config);
+}
+
+/**
+ * createStdinSubject creates a subject for sending and receiving messages on a
+ * kernel's stdin channel
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.stdin_port       Port for stdin channel
+ * @return {Rx.Subject} subject for sending and receiving messages on the stdin
+ *                      channel
+ */
+export function createStdinSubject(identity, config) {
+  return createChannelSubject(STDIN, identity, config);
+}
+
+/**
+ * createIOPubSubject creates a shell subject for receiving messages on a
+ * kernel's iopub channel
+ * @param  {string} identity                UUID
+ * @param  {Object} config                  Jupyter connection information
+ * @param  {string} config.ip               IP address of the kernel
+ * @param  {string} config.transport        Transport, e.g. TCP
+ * @param  {string} config.signature_scheme Hashing scheme, e.g. hmac-sha256
+ * @param  {number} config.iopub_port       Port for iopub channel
+ * @param  {string} subscription            subscribed topic; defaults to all
+ * @return {Rx.Subject} subject for receiving messages on the shell_port
+ *                      channel
+ */
+export function createIOPubSubject(identity, config, subscription = "") {
+  const ioPubSocket = createSocket(IOPUB, identity, config);
+  // ZMQ PUB/SUB subscription (not an Rx subscription)
+  ioPubSocket.subscribe(subscription);
+  return createSubject(ioPubSocket);
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#createChannels">createChannels</a></li><li><a href="global.html#createChannelSubject">createChannelSubject</a></li><li><a href="global.html#createControlSubject">createControlSubject</a></li><li><a href="global.html#createIOPubSubject">createIOPubSubject</a></li><li><a href="global.html#createObservable">createObservable</a></li><li><a href="global.html#createShellSubject">createShellSubject</a></li><li><a href="global.html#createSocket">createSocket</a></li><li><a href="global.html#createStdinSubject">createStdinSubject</a></li><li><a href="global.html#createSubject">createSubject</a></li><li><a href="global.html#createSubscriber">createSubscriber</a></li><li><a href="global.html#formConnectionString">formConnectionString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.4</a> on Thu Aug 10 2017 19:02:12 GMT+0000 (UTC)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
