@@ -1,9 +1,4 @@
 # enchannel-zmq-backend
-[![GitHub release](https://img.shields.io/badge/enchannel--zmq--backend-version--latest-blue.svg)](https://github.com/nteract/enchannel-zmq-backend/releases)
-[![enchannel spec version](https://img.shields.io/badge/enchannel%20spec-version%201.1-ff69b4.svg)](https://github.com/nteract/enchannel/releases)
-[![Greenkeeper badge](https://badges.greenkeeper.io/nteract/enchannel-zmq-backend.svg)](https://greenkeeper.io/)
-
-:warning: :warning: Moved to the [nteract/nteract monorepo](https://github.com/nteract/nteract/tree/master/packages/enchannel-zmq-backend) :warning: :warning:
 
 [**Installation**](#installation) | [**Usage**](#usage) |
 [**Contributors and developers**](#contributors-and-developers) |
@@ -51,7 +46,13 @@ That's it. Functions for four channels; *simplicity in action*.
 
 Prerequisite: [Node.js and npm](https://docs.npmjs.com/getting-started/installing-node)
 
-`npm install enchannel-zmq-backend`
+You may use whichever package manager (`npm` or `yarn`) best suits your workflow. The `nteract` team internally uses `yarn`.
+
+```bash
+npm install enchannel-zmq-backend
+# OR
+yarn add enchannel-zmq-backend
+```
 
 ## Usage
 
@@ -98,6 +99,43 @@ To create the channels *object*:
 ```javascript
 const channels = createChannels(identity, runtimeConfig)
 const { shell, iopub, stdin, control } = channels;
+```
+
+`enchannel-zmq-backend` also gives access to all of the `channels` via a
+single multipled channel exposed via `createMainChannel`.
+
+```javascript
+import { createMainChannel } from 'enchannel-zmq-backend';
+```
+
+Similar to the `createChannels` function, the `createMainChannel` function
+accepts both an identity and a runtime object.
+
+```javascript
+const channel = createMainChannel(identity, runtimeConfig);
+```
+
+Messages that are sent via the mutliplexed channel need to define a `type`
+property that outlines which channel they should be sent under.
+
+```javascript
+const body = {
+    header: {
+        msg_id: `execute_9ed11a0f-707e-4f71-829c-a19b8ff8eed8`,
+        username: "rgbkrk",
+        session: "00000000-0000-0000-0000-000000000000",
+        msg_type: "execute_request",
+        version: "5.0"
+    },
+    content: {
+        code: 'print("woo")',
+        silent: false,
+        store_history: true,
+        user_expressions: {},
+        allow_stdin: false
+    }
+};
+const message = { type: "shell", body };
 ```
 
 `enchannel-zmq-backend` also offers four convenience functions to
@@ -220,7 +258,7 @@ Then, fork and clone this repo:
 ```bash
 git clone https://github.com/nteract/enchannel-zmq-backend.git
 cd enchannel-zmq-backend
-npm install
+yarn
 ```
 
 Develop! We welcome new and first time contributors.
@@ -228,9 +266,9 @@ Develop! We welcome new and first time contributors.
 
 ## Learn more about nteract
 
-- Visit our website http://nteract.io/.
+- Visit our website https://nteract.io/.
 - See our organization on GitHub https://github.com/nteract
-- Join us on [Slack](http://slack.nteract.in/) if you need help or have
+- Join us on [Slack](https://slack.nteract.io/) if you need help or have
   questions. If you have trouble creating an account, either
   email rgbkrk@gmail.com or post an issue on GitHub.
 
