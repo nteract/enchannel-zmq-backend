@@ -25,6 +25,7 @@
     "@types/jest": "^25.1.4",
     "@types/uuid": "^7.0.0",
     "@types/zeromq": "^4.6.1",
+    "conventional-changelog-conventionalcommits": "^4.6.0",
     "jest": "^25.1.0",
     "semantic-release": "^17.4.2",
     "spawnteract": "^5.0.1",
@@ -43,8 +44,12 @@
   },
   "release": {
     "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
       "@semantic-release/npm"
     ]
   }
