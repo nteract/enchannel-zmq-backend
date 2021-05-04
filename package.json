@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc -b",
     "test:integration": "node scripts/exercise-enchannel.js",
-    "test": "jest"
+    "test": "jest",
+    "semantic-release": "semantic-release"
   },
   "publishConfig": {
     "access": "public"
@@ -20,10 +21,13 @@
     "url": "https://github.com/nteract/nteract/issues"
   },
   "devDependencies": {
+    "@semantic-release/npm": "^7.1.1",
     "@types/jest": "^25.1.4",
     "@types/uuid": "^7.0.0",
     "@types/zeromq": "^4.6.1",
+    "conventional-changelog-conventionalcommits": "^4.6.0",
     "jest": "^25.1.0",
+    "semantic-release": "^17.4.2",
     "spawnteract": "^5.0.1",
     "ts-jest": "^25.2.1",
     "typescript": "^3.8.3",
@@ -37,5 +41,16 @@
   },
   "peerDependencies": {
     "rxjs": "^6.3.3"
+  },
+  "release": {
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      "@semantic-release/npm"
+    ]
   }
 }
