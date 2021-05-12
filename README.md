@@ -244,7 +244,7 @@ before you can send on a channel.
 If you plan to contribute to this project or extend it, you will need
 to have [ZeroMQ](http://zeromq.org/intro:get-the-software) installed on
 your system. The easiest way to do this is to install nteract's
-`zmq-prebuilt`[] binary for your operating system.
+[`zmq-prebuilt`][] binary for your operating system.
 
 ### Install a local development environment
 
