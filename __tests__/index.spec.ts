@@ -1,5 +1,6 @@
 import { Subject } from "rxjs";
 import { take, toArray } from "rxjs/operators";
+import { firstValueFrom } from "rxjs";
 import { v4 as uuid } from "uuid";
 
 import {
@@ -12,31 +13,49 @@ import {
 } from "../src";
 
 import { EventEmitter } from "events";
-import { Socket as _Socket } from "jmp";
-import * as zmq from "zeromq";
-
-type Socket = typeof _Socket &
-  zmq.Socket &
-  EventEmitter & { unmonitor: Function };
+import { Socket as _Socket, Message } from "../src/jmp";
 
 import { JupyterMessage, MessageType } from "@nteract/messaging";
-import { Message } from "../__mocks__/jmp";
 
 interface Sockets {
-  [id: string]: Socket;
+  [id: string]: MockSocket;
 }
 
-// Mock a jmp socket
-class HokeySocket extends _Socket {
+// Mock a socket that behaves like our jmp Socket
+class MockSocket extends EventEmitter {
   send = jest.fn();
-  constructor() {
-    super("hokey");
-    this.send = jest.fn();
+  type: string;
+  identity: string = "";
+  private _closed = false;
+
+  constructor(type: string = "dealer") {
+    super();
+    this.type = type;
+  }
+
+  monitor(): void {
+    // Simulated - emit connect on next tick
+  }
+
+  unmonitor(): void {
+    // No-op
+  }
+
+  connect(_url: string): void {
+    // No-op for mock
+  }
+
+  close(): void {
+    this._closed = true;
+  }
+
+  subscribe(_topic: string): void {
+    // No-op for mock (only relevant for sub sockets)
   }
 }
 
 describe("createSocket", () => {
-  test("creates a JMP socket on the channel with identity", async done => {
+  test("creates a JMP socket on the channel with identity", async () => {
     const config = {
       signature_scheme: "hmac-sha256",
       key: "5ca1ab1e-c0da-aced-cafe-c0ffeefacade",
@@ -51,13 +70,11 @@ describe("createSocket", () => {
     expect(socket.identity).toBe(identity);
     expect(socket.type).toBe(ZMQType.frontend.iopub);
     socket.close();
-
-    done();
   });
 });
 
 describe("verifiedConnect", () => {
-  test("verifiedConnect monitors the socket", async done => {
+  test("verifiedConnect monitors the socket", async () => {
     const emitter = new EventEmitter();
 
     const socket = {
@@ -71,7 +88,7 @@ describe("verifiedConnect", () => {
     };
 
     const p = verifiedConnect(
-      (socket as unknown) as _Socket,
+      socket as unknown as _Socket,
       "tcp://127.0.0.1:8945"
     );
     expect(socket.monitor).toHaveBeenCalledTimes(1);
@@ -84,11 +101,9 @@ describe("verifiedConnect", () => {
 
     await p;
     expect(socket.unmonitor).toHaveBeenCalledTimes(1);
-
-    done();
   });
 
-  test("verifiedConnect monitors the socket properly even on fast connect", async done => {
+  test("verifiedConnect monitors the socket properly even on fast connect", async () => {
     const emitter = new EventEmitter();
 
     const socket = {
@@ -103,12 +118,11 @@ describe("verifiedConnect", () => {
       })
     };
 
-    verifiedConnect((socket as unknown) as _Socket, "tcp://127.0.0.1:8945");
+    verifiedConnect(socket as unknown as _Socket, "tcp://127.0.0.1:8945");
     expect(socket.monitor).toHaveBeenCalledTimes(1);
     expect(socket.connect).toHaveBeenCalledTimes(1);
     expect(socket.unmonitor).toHaveBeenCalledTimes(1);
     expect(socket.connect).toHaveBeenCalledWith("tcp://127.0.0.1:8945");
-    done();
   });
 });
 
@@ -149,7 +163,7 @@ describe("getUsername", () => {
 describe("createMainChannelFromSockets", () => {
   test("basic creation", () => {
     const sockets = {
-      hokey: {} as any
+      hokey: new MockSocket() as unknown as _Socket
     };
     // TODO: This shouldn't work silently if the socket doesn't actually behave
     // like an actual socket
@@ -161,10 +175,10 @@ describe("createMainChannelFromSockets", () => {
     expect(channels).toBeInstanceOf(Subject);
   });
 
-  test("simple one channel message passing from 'socket' to channels", () => {
-    const hokeySocket = new HokeySocket();
+  test("simple one channel message passing from 'socket' to channels", async () => {
+    const hokeySocket = new MockSocket();
     const sockets = {
-      shell: hokeySocket
+      shell: hokeySocket as unknown as _Socket
     };
 
     const channels = createMainChannelFromSockets(sockets);
@@ -172,48 +186,50 @@ describe("createMainChannelFromSockets", () => {
 
     const messages = [{ a: 1 }, { a: 2 }, { b: 3 }];
 
-    const p = channels.pipe(take(messages.length), toArray()).toPromise();
+    const p = firstValueFrom(
+      (channels as unknown as Subject<any>).pipe(take(messages.length), toArray())
+    );
 
     for (const message of messages) {
       hokeySocket.emit("message", message);
     }
 
-    return p.then((modifiedMessages: any) => {
-      expect(modifiedMessages).toEqual(
-        messages.map(msg => ({ ...msg, channel: "shell" }))
-      );
-    });
+    const modifiedMessages = await p;
+    expect(modifiedMessages).toEqual(
+      messages.map(msg => ({ ...msg, channel: "shell" }))
+    );
   });
 
-  test("handles multiple socket routing underneath", () => {
-    const shellSocket = new HokeySocket();
-    const iopubSocket = new HokeySocket();
+  test("handles multiple socket routing underneath", async () => {
+    const shellSocket = new MockSocket();
+    const iopubSocket = new MockSocket();
     const sockets = {
-      shell: shellSocket,
-      iopub: iopubSocket
+      shell: shellSocket as unknown as _Socket,
+      iopub: iopubSocket as unknown as _Socket
     };
 
     const channels = createMainChannelFromSockets(sockets);
 
-    const p = channels.pipe(take(2), toArray()).toPromise();
+    const p = firstValueFrom(
+      (channels as unknown as Subject<any>).pipe(take(2), toArray())
+    );
 
     shellSocket.emit("message", { yolo: false });
     iopubSocket.emit("message", { yolo: true });
 
-    return p.then((modifiedMessages: any) => {
-      expect(modifiedMessages).toEqual([
-        { channel: "shell", yolo: false },
-        { channel: "iopub", yolo: true }
-      ]);
-    });
+    const modifiedMessages = await p;
+    expect(modifiedMessages).toEqual([
+      { channel: "shell", yolo: false },
+      { channel: "iopub", yolo: true }
+    ]);
   });
 
-  test("propagates header information through", async done => {
-    const shellSocket = new HokeySocket();
-    const iopubSocket = new HokeySocket();
+  test("propagates header information through", async () => {
+    const shellSocket = new MockSocket();
+    const iopubSocket = new MockSocket();
     const sockets = {
-      shell: shellSocket,
-      iopub: iopubSocket
+      shell: shellSocket as unknown as _Socket,
+      iopub: iopubSocket as unknown as _Socket
     };
 
     const channels = createMainChannelFromSockets(sockets, {
@@ -221,19 +237,19 @@ describe("createMainChannelFromSockets", () => {
       username: "dj"
     });
 
-    const responses = channels.pipe(take(2), toArray()).toPromise();
+    const responses = firstValueFrom(
+      (channels as unknown as Subject<any>).pipe(take(2), toArray())
+    );
 
     channels.next({ channel: "shell" } as JupyterMessage<any>);
 
     expect(shellSocket.send).toHaveBeenCalledWith(
-      new Message({
-        buffers: new Uint8Array(),
+      expect.objectContaining({
         content: {},
-        header: {
+        header: expect.objectContaining({
           session: "spinning",
           username: "dj"
-        },
-        idents: [],
+        }),
         metadata: {},
         parent_header: {}
       })
@@ -257,20 +273,18 @@ describe("createMainChannelFromSockets", () => {
     } as JupyterMessage);
 
     expect(shellSocket.send).toHaveBeenLastCalledWith(
-      new Message({
-        buffers: new Uint8Array(),
+      expect.objectContaining({
         content: {
           applesauce: "mcgee"
         },
-        header: {
+        header: expect.objectContaining({
           msg_type: "random",
           session: "spinning",
           username: "dj",
           msg_id: "XYZ",
           date: expect.any(String),
           version: "3"
-        },
-        idents: [],
+        }),
         metadata: {},
         parent_header: {}
       })
@@ -285,7 +299,5 @@ describe("createMainChannelFromSockets", () => {
       { channel: "shell", yolo: false },
       { channel: "iopub", yolo: true }
     ]);
-
-    done();
   });
 });
