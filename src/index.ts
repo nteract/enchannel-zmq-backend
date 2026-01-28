@@ -290,8 +290,9 @@ export const createMainChannelFromSockets = (
         }),
     ).pipe(share());
 
+    // TODO: Fix this after updating @nteract/messaging.
     return new BidirectionalChannel(
         incomingMessages,
         outgoingMessages,
-    ) as Channels;
+    ) as unknown as Channels;
 };
