@@ -8,19 +8,55 @@ import * as crypto from "crypto";
 import { EventEmitter } from "events";
 import * as zmq from "zeromq";
 
+/**
+ * Jupyter message header as defined in the wire protocol.
+ * @see https://jupyter-client.readthedocs.io/en/latest/messaging.html#the-wire-protocol
+ */
+export interface MessageHeader {
+  msg_id?: string;
+  msg_type?: string;
+  username?: string;
+  session?: string;
+  date?: string;
+  version?: string;
+  subshell_id?: string | null;
+}
+
+/**
+ * Parent header is a copy of the originating message's header,
+ * or an empty object when no parent exists.
+ */
+export interface ParentHeader {
+  msg_id?: string;
+  msg_type?: string;
+  username?: string;
+  session?: string;
+  date?: string;
+  version?: string;
+  subshell_id?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Metadata dictionary containing non-content message information.
+ */
+export interface MessageMetadata {
+  [key: string]: unknown;
+}
+
+/**
+ * Message content - structure varies by msg_type.
+ */
+export interface MessageContent {
+  [key: string]: unknown;
+}
+
 export interface MessageProperties {
   idents?: Buffer[];
-  header: {
-    msg_id?: string;
-    msg_type?: string;
-    username?: string;
-    session?: string;
-    date?: string;
-    version?: string;
-  };
-  parent_header: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  content: Record<string, unknown>;
+  header: MessageHeader;
+  parent_header: ParentHeader;
+  metadata: MessageMetadata;
+  content: MessageContent;
   buffers?: Buffer[];
 }
 
@@ -31,10 +67,10 @@ const DELIMITER = "<IDS|MSG>";
  */
 export class Message {
   idents: Buffer[];
-  header: Record<string, unknown>;
-  parent_header: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  content: Record<string, unknown>;
+  header: MessageHeader;
+  parent_header: ParentHeader;
+  metadata: MessageMetadata;
+  content: MessageContent;
   buffers: Buffer[];
 
   constructor(properties?: Partial<MessageProperties>) {

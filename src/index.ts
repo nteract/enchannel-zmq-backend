@@ -5,32 +5,59 @@ import { v4 as uuid } from "uuid";
 import * as moduleJMP from "./jmp";
 
 export const ZMQType = {
-  frontend: {
-    iopub: "sub",
-    stdin: "dealer",
-    shell: "dealer",
-    control: "dealer"
-  }
+    frontend: {
+        iopub: "sub",
+        stdin: "dealer",
+        shell: "dealer",
+        control: "dealer",
+    },
 };
 
 type ChannelName = "iopub" | "stdin" | "shell" | "control";
 
 export interface JupyterConnectionInfo {
-  version: number;
-  iopub_port: number;
-  shell_port: number;
-  stdin_port: number;
-  control_port: number;
-  signature_scheme: "hmac-sha256";
-  hb_port: number;
-  ip: string;
-  key: string;
-  transport: "tcp" | "ipc";
+    version: number;
+    iopub_port: number;
+    shell_port: number;
+    stdin_port: number;
+    control_port: number;
+    signature_scheme: "hmac-sha256";
+    hb_port: number;
+    ip: string;
+    key: string;
+    transport: "tcp" | "ipc";
 }
 
 interface HeaderFiller {
-  session: string;
-  username: string;
+    session: string;
+    username: string;
+}
+
+/**
+ * A bidirectional Subject that properly separates incoming and outgoing message streams.
+ * - Subscribing to this Subject receives messages from the kernel (incoming)
+ * - Calling next() sends messages to the kernel (outgoing)
+ */
+class BidirectionalChannel extends Subject<JupyterMessage> {
+    constructor(
+        private incoming: Observable<JupyterMessage>,
+        private outgoing: Subscriber<JupyterMessage>,
+    ) {
+        super();
+        this.incoming.subscribe({
+            next: (msg) => super.next(msg),
+            error: (err) => super.error(err),
+        });
+    }
+
+    override next(message: JupyterMessage): void {
+        this.outgoing.next(message);
+    }
+
+    override complete(): void {
+        this.outgoing.complete();
+        super.complete();
+    }
 }
 
 /**
@@ -44,15 +71,15 @@ interface HeaderFiller {
  * @returns The connection string
  */
 export const formConnectionString = (
-  config: JupyterConnectionInfo,
-  channel: ChannelName
+    config: JupyterConnectionInfo,
+    channel: ChannelName,
 ) => {
-  const portDelimiter = config.transport === "tcp" ? ":" : "-";
-  const port = config[`${channel}_port` as keyof JupyterConnectionInfo];
-  if (!port) {
-    throw new Error(`Port not found for channel "${channel}"`);
-  }
-  return `${config.transport}://${config.ip}${portDelimiter}${port}`;
+    const portDelimiter = config.transport === "tcp" ? ":" : "-";
+    const port = config[`${channel}_port` as keyof JupyterConnectionInfo];
+    if (!port) {
+        throw new Error(`Port not found for channel "${channel}"`);
+    }
+    return `${config.transport}://${config.ip}${portDelimiter}${port}`;
 };
 
 /**
@@ -65,19 +92,19 @@ export const formConnectionString = (
  * @returns The new Jupyter ZMQ socket
  */
 export const createSocket = (
-  channel: ChannelName,
-  identity: string,
-  config: JupyterConnectionInfo,
-  jmp: typeof moduleJMP = moduleJMP
+    channel: ChannelName,
+    identity: string,
+    config: JupyterConnectionInfo,
+    jmp: typeof moduleJMP = moduleJMP,
 ): Promise<moduleJMP.Socket> => {
-  const zmqType = ZMQType.frontend[channel] as "dealer" | "sub";
-  const scheme = config.signature_scheme.slice("hmac-".length);
+    const zmqType = ZMQType.frontend[channel] as "dealer" | "sub";
+    const scheme = config.signature_scheme.slice("hmac-".length);
 
-  const socket = new jmp.Socket(zmqType, scheme, config.key);
-  socket.identity = identity;
+    const socket = new jmp.Socket(zmqType, scheme, config.key);
+    socket.identity = identity;
 
-  const url = formConnectionString(config, channel);
-  return verifiedConnect(socket, url);
+    const url = formConnectionString(config, channel);
+    return verifiedConnect(socket, url);
 };
 
 /**
@@ -89,25 +116,25 @@ export const createSocket = (
  * @returns A Promise resolving to the same socket.
  */
 export const verifiedConnect = (
-  socket: moduleJMP.Socket,
-  url: string
+    socket: moduleJMP.Socket,
+    url: string,
 ): Promise<moduleJMP.Socket> =>
-  new Promise(resolve => {
-    socket.on("connect", () => {
-      // We are not ready until this happens for all the sockets
-      socket.unmonitor();
-      resolve(socket);
+    new Promise((resolve) => {
+        socket.on("connect", () => {
+            // We are not ready until this happens for all the sockets
+            socket.unmonitor();
+            resolve(socket);
+        });
+        socket.monitor();
+        socket.connect(url);
     });
-    socket.monitor();
-    socket.connect(url);
-  });
 
 export const getUsername = () =>
-  process.env.LOGNAME ||
-  process.env.USER ||
-  process.env.LNAME ||
-  process.env.USERNAME ||
-  "username"; // This is the fallback that the classic notebook uses
+    process.env.LOGNAME ||
+    process.env.USER ||
+    process.env.LNAME ||
+    process.env.USERNAME ||
+    "username"; // This is the fallback that the classic notebook uses
 
 /**
  * Creates a multiplexed set of channels.
@@ -123,18 +150,18 @@ export const getUsername = () =>
  * @returns Subject containing multiplexed channels
  */
 export const createMainChannel = async (
-  config: JupyterConnectionInfo,
-  subscription: string = "",
-  identity: string = uuid(),
-  header: HeaderFiller = {
-    session: uuid(),
-    username: getUsername()
-  },
-  jmp = moduleJMP
+    config: JupyterConnectionInfo,
+    subscription: string = "",
+    identity: string = uuid(),
+    header: HeaderFiller = {
+        session: uuid(),
+        username: getUsername(),
+    },
+    jmp = moduleJMP,
 ): Promise<Channels> => {
-  const sockets = await createSockets(config, subscription, identity, jmp);
-  const main = createMainChannelFromSockets(sockets, header, jmp);
-  return main;
+    const sockets = await createSockets(config, subscription, identity, jmp);
+    const main = createMainChannelFromSockets(sockets, header, jmp);
+    return main;
 };
 
 /**
@@ -148,27 +175,27 @@ export const createMainChannel = async (
  * @returns Sockets for each Jupyter channel
  */
 export const createSockets = async (
-  config: JupyterConnectionInfo,
-  subscription: string = "",
-  identity = uuid(),
-  jmp = moduleJMP
+    config: JupyterConnectionInfo,
+    subscription: string = "",
+    identity = uuid(),
+    jmp = moduleJMP,
 ) => {
-  const [shell, control, stdin, iopub] = await Promise.all([
-    createSocket("shell", identity, config, jmp),
-    createSocket("control", identity, config, jmp),
-    createSocket("stdin", identity, config, jmp),
-    createSocket("iopub", identity, config, jmp)
-  ]);
+    const [shell, control, stdin, iopub] = await Promise.all([
+        createSocket("shell", identity, config, jmp),
+        createSocket("control", identity, config, jmp),
+        createSocket("stdin", identity, config, jmp),
+        createSocket("iopub", identity, config, jmp),
+    ]);
 
-  // NOTE: ZMQ PUB/SUB subscription (not an Rx subscription)
-  iopub.subscribe(subscription);
+    // NOTE: ZMQ PUB/SUB subscription (not an Rx subscription)
+    iopub.subscribe(subscription);
 
-  return {
-    shell,
-    control,
-    stdin,
-    iopub
-  };
+    return {
+        shell,
+        control,
+        stdin,
+        iopub,
+    };
 };
 
 /**
@@ -182,112 +209,89 @@ export const createSockets = async (
  * to send and receive messages through the Jupyter protocol.
  */
 export const createMainChannelFromSockets = (
-  sockets: {
-    [name: string]: moduleJMP.Socket;
-  },
-  header: HeaderFiller = {
-    session: uuid(),
-    username: getUsername()
-  },
-  jmp = moduleJMP
-): Channels => {
-  // The mega subject that encapsulates all the sockets as one multiplexed
-  // stream
-
-  const outgoingMessages = Subscriber.create<JupyterMessage>(
-    message => {
-      // There's always a chance that a bad message is sent, we'll ignore it
-      // instead of consuming it
-      if (!message || !message.channel) {
-        console.warn("message sent without a channel", message);
-        return;
-      }
-      const socket = sockets[message.channel];
-      if (!socket) {
-        // If, for some reason, a message is sent on a channel we don't have
-        // a socket for, warn about it but don't bomb the stream
-        console.warn("channel not understood for message", message);
-        return;
-      }
-      try {
-        const jMessage = new jmp.Message({
-          // Fold in the setup header to ease usage of messages on channels
-          header: { ...message.header, ...header } as Record<string, unknown>,
-          parent_header: (message.parent_header || {}) as Record<string, unknown>,
-          content: (message.content || {}) as Record<string, unknown>,
-          metadata: (message.metadata || {}) as Record<string, unknown>,
-          buffers: message.buffers?.map(b =>
-            Buffer.isBuffer(b) ? b : Buffer.from(b as ArrayBuffer)
-          )
-        });
-        socket.send(jMessage);
-      } catch (err) {
-        console.error("Error sending message", err, message);
-      }
+    sockets: {
+        [name: string]: moduleJMP.Socket;
     },
-    undefined, // not bothering with sending errors on
-    () =>
-      // When the subject is completed / disposed, close all the event
-      // listeners and shutdown the socket
-      Object.keys(sockets).forEach(name => {
-        const socket = sockets[name];
-        socket.removeAllListeners();
-        if (socket.close) {
-          socket.close();
-        }
-      })
-  );
+    header: HeaderFiller = {
+        session: uuid(),
+        username: getUsername(),
+    },
+    jmp = moduleJMP,
+): Channels => {
+    // The mega subject that encapsulates all the sockets as one multiplexed
+    // stream
+    const outgoingMessages = Subscriber.create<JupyterMessage>(
+        (message) => {
+            // There's always a chance that a bad message is sent, we'll ignore it
+            // instead of consuming it
+            if (!message || !message.channel) {
+                console.warn("message sent without a channel", message);
+                return;
+            }
+            const socket = sockets[message.channel];
+            if (!socket) {
+                // If, for some reason, a message is sent on a channel we don't have
+                // a socket for, warn about it but don't bomb the stream
+                console.warn("channel not understood for message", message);
+                return;
+            }
+            try {
+                const jMessage = new jmp.Message({
+                    // Fold in the setup header to ease usage of messages on channels
+                    header: {
+                        ...message.header,
+                        ...header,
+                    } as moduleJMP.MessageHeader,
+                    parent_header: (message.parent_header ||
+                        {}) as moduleJMP.ParentHeader,
+                    content: (message.content ||
+                        {}) as moduleJMP.MessageContent,
+                    metadata: (message.metadata ||
+                        {}) as moduleJMP.MessageMetadata,
+                    buffers: message.buffers?.map((b) =>
+                        Buffer.isBuffer(b) ? b : Buffer.from(b as ArrayBuffer),
+                    ),
+                });
+                socket.send(jMessage);
+            } catch (err) {
+                console.error("Error sending message", err, message);
+            }
+        },
+        undefined, // not bothering with sending errors on
+        () =>
+            // When the subject is completed / disposed, close all the event
+            // listeners and shutdown the socket
+            Object.keys(sockets).forEach((name) => {
+                const socket = sockets[name];
+                socket.removeAllListeners();
+                if (socket.close) {
+                    socket.close();
+                }
+            }),
+    );
 
-  // Messages from kernel on the sockets
-  const incomingMessages: Observable<JupyterMessage> = merge(
-    // Form an Observable with each socket
-    ...Object.keys(sockets).map(name => {
-      const socket = sockets[name];
-      // fromEvent works with EventEmitter-compatible objects
-      return fromEvent<JupyterMessage>(socket, "message").pipe(
-        map(
-          (body: JupyterMessage): JupyterMessage => {
-            // Route the message for the frontend by setting the channel
-            const msg = { ...body, channel: name };
-            // Conform to same message format as notebook websockets
-            // See https://github.com/n-riesco/jmp/issues/10
-            delete (msg as any).idents;
-            return msg;
-          }
-        ),
-        share()
-      );
-    })
-  ).pipe(share());
+    // Messages from kernel on the sockets
+    const incomingMessages: Observable<JupyterMessage> = merge(
+        // Form an Observable with each socket
+        ...Object.keys(sockets).map((name) => {
+            const socket = sockets[name];
+            // fromEvent works with EventEmitter-compatible objects
+            return fromEvent<JupyterMessage>(socket, "message").pipe(
+                map((body: JupyterMessage): JupyterMessage => {
+                    // Route the message for the frontend by setting the channel
+                    const msg = { ...body, channel: name };
+                    // Conform to same message format as notebook websockets
+                    // See https://github.com/n-riesco/jmp/issues/10
+                    delete (msg as any).idents;
+                    return msg;
+                }),
+                share(),
+            );
+        }),
+    ).pipe(share());
 
-  // Create a custom subject that combines outgoing and incoming streams
-  const subject = new Subject<JupyterMessage>();
-
-  // Store the original methods before overriding
-  const originalNext = subject.next.bind(subject);
-  const originalComplete = subject.complete.bind(subject);
-
-  // Forward incoming messages to the subject using original next
-  incomingMessages.subscribe({
-    next: msg => originalNext(msg),
-    error: err => subject.error(err)
-  });
-
-  // Override the subject's next to send outgoing messages to sockets
-  subject.next = (message: JupyterMessage) => {
-    // Send outgoing messages through the socket handler
-    if (outgoingMessages.next) {
-      outgoingMessages.next(message);
-    }
-    return undefined as void;
-  };
-
-  subject.complete = () => {
-    if (outgoingMessages.complete) {
-      outgoingMessages.complete();
-    }
-    originalComplete();
-  };
-
-  return subject as unknown as Channels;
+    return new BidirectionalChannel(
+        incomingMessages,
+        outgoingMessages,
+    ) as Channels;
 };
