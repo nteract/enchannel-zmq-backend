@@ -1,9 +1,8 @@
 import { Channels, JupyterMessage } from "@nteract/messaging";
-import * as moduleJMP from "jmp";
 import { fromEvent, merge, Observable, Subject, Subscriber } from "rxjs";
-import { FromEventTarget } from "rxjs/internal/observable/fromEvent";
-import { map, publish, refCount } from "rxjs/operators";
+import { map, share } from "rxjs/operators";
 import { v4 as uuid } from "uuid";
+import * as moduleJMP from "./jmp";
 
 export const ZMQType = {
   frontend: {
@@ -69,9 +68,9 @@ export const createSocket = (
   channel: ChannelName,
   identity: string,
   config: JupyterConnectionInfo,
-  jmp = moduleJMP
+  jmp: typeof moduleJMP = moduleJMP
 ): Promise<moduleJMP.Socket> => {
-  const zmqType = ZMQType.frontend[channel];
+  const zmqType = ZMQType.frontend[channel] as "dealer" | "sub";
   const scheme = config.signature_scheme.slice("hmac-".length);
 
   const socket = new jmp.Socket(zmqType, scheme, config.key);
@@ -213,11 +212,13 @@ export const createMainChannelFromSockets = (
       try {
         const jMessage = new jmp.Message({
           // Fold in the setup header to ease usage of messages on channels
-          header: { ...message.header, ...header },
-          parent_header: message.parent_header,
-          content: message.content,
-          metadata: message.metadata,
-          buffers: message.buffers
+          header: { ...message.header, ...header } as Record<string, unknown>,
+          parent_header: (message.parent_header || {}) as Record<string, unknown>,
+          content: (message.content || {}) as Record<string, unknown>,
+          metadata: (message.metadata || {}) as Record<string, unknown>,
+          buffers: message.buffers?.map(b =>
+            Buffer.isBuffer(b) ? b : Buffer.from(b as ArrayBuffer)
+          )
         });
         socket.send(jMessage);
       } catch (err) {
@@ -242,13 +243,8 @@ export const createMainChannelFromSockets = (
     // Form an Observable with each socket
     ...Object.keys(sockets).map(name => {
       const socket = sockets[name];
-      // fromEvent typings are broken. socket will work as an event target.
-      return fromEvent(
-        // Pending a refactor around jmp, this allows us to treat the socket
-        // as a normal event emitter
-        (socket as unknown) as FromEventTarget<JupyterMessage>,
-        "message"
-      ).pipe(
+      // fromEvent works with EventEmitter-compatible objects
+      return fromEvent<JupyterMessage>(socket, "message").pipe(
         map(
           (body: JupyterMessage): JupyterMessage => {
             // Route the message for the frontend by setting the channel
@@ -259,16 +255,39 @@ export const createMainChannelFromSockets = (
             return msg;
           }
         ),
-        publish(),
-        refCount()
+        share()
       );
     })
-  ).pipe(publish(), refCount());
+  ).pipe(share());
 
-  const subject: Subject<JupyterMessage> = Subject.create(
-    outgoingMessages,
-    incomingMessages
-  );
+  // Create a custom subject that combines outgoing and incoming streams
+  const subject = new Subject<JupyterMessage>();
 
-  return subject;
+  // Store the original methods before overriding
+  const originalNext = subject.next.bind(subject);
+  const originalComplete = subject.complete.bind(subject);
+
+  // Forward incoming messages to the subject using original next
+  incomingMessages.subscribe({
+    next: msg => originalNext(msg),
+    error: err => subject.error(err)
+  });
+
+  // Override the subject's next to send outgoing messages to sockets
+  subject.next = (message: JupyterMessage) => {
+    // Send outgoing messages through the socket handler
+    if (outgoingMessages.next) {
+      outgoingMessages.next(message);
+    }
+    return undefined as void;
+  };
+
+  subject.complete = () => {
+    if (outgoingMessages.complete) {
+      outgoingMessages.complete();
+    }
+    originalComplete();
+  };
+
+  return subject as unknown as Channels;
 };
